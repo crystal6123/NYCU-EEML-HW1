@@ -1,0 +1,120 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# sigmoid 函數
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# phi
+def phi(x, j, s, M):
+    if j == 0:
+        return 1
+    else:
+        mu_j = 3 * (-M + 1 + 2 * (j - 1)) / (M - 2)
+        return sigmoid((x - mu_j) / s)
+
+# basis matrix
+def calculate_Phi(X_normalized, M, s):
+    Phi = np.ones((len(X_normalized), M))
+    for j in range(1, M):
+        for i in range(len(X_normalized)):
+            # Add filter condition for X[:, 2]
+            if -3 <= X_normalized[i, 2] <= 2:
+                Phi[i, j] = phi(X_normalized[i, 2], j, s, M)
+            else:
+                Phi[i, j] = 0  # Set Phi to 0 if X[:, 2] is outside the range
+    return Phi
+
+# 計算預測結果
+def calculate_predictions(Phi, t, X_normalized):
+    filtered_indices = np.where((X_normalized[:, 2] >= -3) & (X_normalized[:, 2] <= 2))[0]
+    Phi_filtered = Phi[filtered_indices]
+    t_filtered = t[filtered_indices]
+
+    pinv = np.linalg.pinv(Phi_filtered)
+    w = pinv @ t_filtered
+    t_pred = Phi @ w
+    return t_pred
+
+# Mean
+def calculate_mse(t, t_pred):
+    mse = np.mean((t - t_pred) ** 2)
+    return mse
+
+def calculate_accuracy(t, t_pred):
+    nd = len(t)
+    accuracy = 1 - (1 / nd) * np.sum(np.abs(t_pred - t) / np.where(t == 0, 1, t))
+    return accuracy
+
+data = pd.read_csv('HW1.csv')
+
+X = data[['song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'speechiness', 'tempo', 'audio_valence']].values
+t = data['song_popularity'].values
+
+X_normalized = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
+
+s = 0.1
+M_values = [5, 10, 15, 20, 25, 30] 
+
+num_folds = 5
+fold_size = len(X_normalized) // num_folds
+validation_mse_list = []
+
+for M_val in M_values:
+    validation_mse = 0
+    
+    for fold in range(num_folds):
+        # 切訓練及與預測及
+        val_start = fold * fold_size
+        val_end = (fold + 1) * fold_size
+        X_val_fold = X_normalized[val_start:val_end]
+        t_val_fold = t[val_start:val_end]
+        X_train_fold = np.concatenate((X_normalized[:val_start], X_normalized[val_end:]), axis=0)
+        t_train_fold = np.concatenate((t[:val_start], t[val_end:]), axis=0)
+        
+        # basis function
+        Phi_train_fold = calculate_Phi(X_train_fold, M_val, s)
+        Phi_val_fold = calculate_Phi(X_val_fold, M_val, s)
+        
+        # 預測
+        t_pred_val_fold = calculate_predictions(Phi_val_fold, t_val_fold, X_val_fold)
+        
+        # MSE
+        mse_val_fold = calculate_mse(t_val_fold, t_pred_val_fold)
+        validation_mse += mse_val_fold
+    
+    # 驗證MSE
+    avg_validation_mse = validation_mse / num_folds
+    validation_mse_list.append(avg_validation_mse)
+
+# 選M
+best_M_index = np.argmin(validation_mse_list)
+best_M = M_values[best_M_index]
+
+# 用M來train
+best_Phi = calculate_Phi(X_normalized, best_M, s)
+w = np.linalg.pinv(best_Phi) @ t
+
+# 預測
+t_pred_test = calculate_predictions(best_Phi, t, X_normalized)
+
+# MSE
+test_mse = calculate_mse(t, t_pred_test)
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_normalized[:, 2], t, label='Original Data')
+plt.xlabel('danceability (normalized)')
+plt.ylabel('popularity')
+plt.title(f'Fitting Curve with M={best_M} with Test MSE: {test_mse:.2f}')
+plt.legend()
+
+#篩選
+mask = (X_normalized[:, 2] >= -3) & (X_normalized[:, 2] <= 2)
+sorted_indices = np.argsort(X_normalized[mask][:, 2])
+plt.plot(X_normalized[mask][sorted_indices, 2], t_pred_test[mask][sorted_indices], color='red', label='Fitting Curve')
+plt.legend()
+plt.show()
+
+print(f"Best M selected by 5-fold cross-validation: {best_M}")
+print(f"MSE on testing set with best M: {test_mse}")
