@@ -1,0 +1,46 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def phi(x, j, s, M):
+    if j == 0:
+        return 1
+    else:
+        mu_j = 3 * (-M + 1 + 2 * (j - 1)) / (M - 2)
+        return 1 / (1 + np.exp(-(x - mu_j) / s))
+
+data = pd.read_csv('HW1.csv')
+
+X = data[['song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'speechiness', 'tempo', 'audio_valence']].values
+t = data['song_popularity'].values
+
+X_normalized = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
+
+s = 0.1
+M_values = [5, 15, 20, 25, 30] 
+colors = ['blue', 'green', 'orange', 'purple', 'brown']
+
+Phi = {}
+pinv = {}
+for M_val in M_values:
+    Phi[M_val] = np.ones((len(X_normalized), M_val))
+    for j in range(1, M_val):
+        for i in range(len(X_normalized)):
+            Phi[M_val][i, j] = phi(X_normalized[i, 2], j, s, M_val)
+    pinv[M_val] = np.linalg.pinv(Phi[M_val])
+
+plt.figure(figsize=(10, 6))
+plt.scatter(X_normalized[:, 2], t, label='Test Data')
+for M_val, color in zip(M_values, colors):
+    w = pinv[M_val] @ t
+    t_pred = Phi[M_val] @ w
+    sorted_indices = np.argsort(X_normalized[:, 2]) #排序
+    x3_sorted = X_normalized[:, 2][sorted_indices] 
+    t_pred_sorted = t_pred[sorted_indices] #預測
+    valid_indices = np.where((x3_sorted >= -3) & (x3_sorted <= 2))  # [-3,2]
+    plt.plot(x3_sorted[valid_indices], t_pred_sorted[valid_indices], color=color, label=f'M={M_val}')
+plt.xlabel('danceability (normalized)')
+plt.ylabel('song_popularity')
+plt.title('Fitting Curves with Different M')
+plt.legend()
+plt.show()
