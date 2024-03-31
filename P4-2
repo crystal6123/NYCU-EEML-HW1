@@ -1,0 +1,108 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# sigmoid 函數
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# phi
+def phi(x, j, s, M):
+    if j == 0:
+        return 1
+    else:
+        mu_j = 3 * (-M + 1 + 2 * (j - 1)) / (M - 2)
+        return sigmoid((x - mu_j) / s)
+
+# basis matrix
+def calculate_Phi(X_normalized, M, s):
+    Phi = np.ones((len(X_normalized), M))
+    for j in range(1, M):
+        for i in range(len(X_normalized)):
+            Phi[i, j] = phi(X_normalized[i, 2], j, s, M)
+    return Phi
+
+# 計算預測
+def calculate_predictions(Phi, w):
+    t_pred = Phi @ w
+    return t_pred
+
+# MSE
+def calculate_mse(t, t_pred):
+    mse = np.mean((t - t_pred) ** 2)
+    return mse
+
+# Accuracy
+def calculate_accuracy(t, t_pred):
+    nd = len(t)
+    accuracy = 1 - (1 / nd) * np.sum(np.abs(t_pred - t) / np.where(t == 0, 1, t))
+    return accuracy
+
+data = pd.read_csv('HW1.csv')
+
+X = data[['song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'speechiness', 'tempo', 'audio_valence']].values
+t = data['song_popularity'].values
+
+X_train = X[:10000]
+t_train = t[:10000]
+
+X_test = X[10000:]
+t_test = t[10000:]
+
+X_train_normalized = (X_train - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
+X_test_normalized = (X_test - np.mean(X_train, axis=0)) / np.std(X_train, axis=0)
+
+s = 0.1
+M_values = [5, 10, 15, 20, 25, 30]
+
+mse_train_values = []
+accuracy_train_values = []
+mse_test_values = []
+accuracy_test_values = []
+
+for M_val in M_values:
+    # basis function
+    Phi_train = calculate_Phi(X_train_normalized, M_val, s)
+    Phi_test = calculate_Phi(X_test_normalized, M_val, s)
+
+    # 計算最小二乘
+    pinv_train = np.linalg.pinv(Phi_train)
+    w_train = pinv_train @ t_train
+
+    # 預測
+    t_pred_train = calculate_predictions(Phi_train, w_train)
+    t_pred_test = calculate_predictions(Phi_test, w_train)
+
+    # MSE
+    mse_train = calculate_mse(t_train, t_pred_train)
+    mse_train_values.append(mse_train)
+    mse_test = calculate_mse(t_test, t_pred_test)
+    mse_test_values.append(mse_test)
+
+    # Accuracy
+    accuracy_train = calculate_accuracy(t_train, t_pred_train)
+    accuracy_train_values.append(accuracy_train)
+    accuracy_test = calculate_accuracy(t_test, t_pred_test)
+    accuracy_test_values.append(accuracy_test)
+
+#MSE
+plt.figure(figsize=(12, 6))
+plt.plot(M_values, mse_train_values, marker='o', label='Training MSE')
+plt.plot(M_values, mse_test_values, marker='o', label='Testing MSE')
+plt.xlabel('M values')
+plt.ylabel('MSE')
+plt.title('Mean Squared Error (MSE) vs. M')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+#accuracy
+plt.figure(figsize=(12, 6))
+plt.plot(M_values, accuracy_train_values, marker='o', label='Training Accuracy')
+plt.plot(M_values, accuracy_test_values, marker='o', label='Testing Accuracy')
+plt.xlabel('M values')
+plt.ylabel('Accuracy')
+plt.title('Accuracy vs. M')
+plt.legend()
+plt.grid(True)
+plt.show()
