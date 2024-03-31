@@ -1,0 +1,98 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# basis
+def phi(x, j, s, M):
+    if j == 0:
+        return 1
+    else:
+        mu_j = 3 * (-M + 1 + 2 * (j - 1)) / (M - 2)
+        return 1 / (1 + np.exp(-(x - mu_j) / s))
+
+# design matrix
+def calculate_Phi(X_normalized, M, s):
+    Phi = np.ones((len(X_normalized), M))
+    for j in range(1, M):
+        for i in range(len(X_normalized)):
+            if -3 <= X_normalized[i, 2] <= 2:
+                Phi[i, j] = phi(X_normalized[i, 2], j, s, M)
+            else:
+                Phi[i, j] = np.median(t)  #篩選
+    return Phi
+
+def calculate_predictions(Phi, t, M):
+    pinv = np.linalg.pinv(Phi)
+    w = pinv @ t
+    t_pred = Phi @ w
+    return t_pred
+
+def calculate_average_prediction(t_pred, t):
+    avg_t_pred = np.mean(t_pred)
+    avg_t = np.mean(t)
+    return avg_t_pred, avg_t
+
+# MSE
+def calculate_mse(t, t_pred):
+    mse = np.mean((t - t_pred) ** 2)
+    return mse
+
+def calculate_accuracy(t, t_pred):
+    nd = len(t)
+    accuracy = 1 - (1 / nd) * np.sum(np.abs(t_pred - t) / np.where(t == 0, 1, t))
+    return accuracy
+
+data = pd.read_csv('HW1.csv')
+
+X = data[['song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'speechiness', 'tempo', 'audio_valence']].values
+t = data['song_popularity'].values
+
+X_normalized = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
+
+s = 0.1
+M_values = [5, 10, 15, 20, 25, 30]
+
+# 計算過程
+train_mse = []
+test_mse = []
+train_accuracy = []
+test_accuracy = []
+
+for M_val in M_values:
+    # design matrix
+    Phi_train = calculate_Phi(X_normalized[:10000], M_val, s)
+    Phi_test = calculate_Phi(X_normalized[10000:], M_val, s)
+    
+    # predict
+    t_pred_train = calculate_predictions(Phi_train, t[:10000], M_val)
+    t_pred_test = calculate_predictions(Phi_test, t[10000:], M_val)
+    
+    # MSE
+    train_mse.append(calculate_mse(t[:10000], t_pred_train))
+    test_mse.append(calculate_mse(t[10000:], t_pred_test))
+    
+    # accuracy
+    train_accuracy.append(calculate_accuracy(t[:10000], t_pred_train))
+    test_accuracy.append(calculate_accuracy(t[10000:], t_pred_test))
+
+#MSE
+plt.figure(figsize=(10, 6))
+plt.plot(M_values, train_mse, marker='o', label='Training Set')
+plt.plot(M_values, test_mse, marker='o', label='Testing Set')
+plt.xlabel('M (Number of Basis Functions)')
+plt.ylabel('Mean Squared Error (MSE)')
+plt.title('MSE on Training and Testing Sets')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+#accuracy
+plt.figure(figsize=(10, 6))
+plt.plot(M_values, train_accuracy, marker='o', label='Training Set')
+plt.plot(M_values, test_accuracy, marker='o', label='Testing Set')
+plt.xlabel('M (Number of Basis Functions)')
+plt.ylabel('Accuracy')
+plt.title('Accuracy on Training and Testing Sets')
+plt.legend()
+plt.grid(True)
+plt.show()
