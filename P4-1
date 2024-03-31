@@ -1,0 +1,75 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# sigmoid 函數
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# phi
+def phi(x, j, s, M):
+    if j == 0:
+        return 1
+    else:
+        mu_j = 3 * (-M + 1 + 2 * (j - 1)) / (M - 2)
+        return sigmoid((x - mu_j) / s)
+
+# basis matrix
+def calculate_Phi(X_normalized, M, s):
+    Phi = np.ones((len(X_normalized), M))
+    for j in range(1, M):
+        for i in range(len(X_normalized)):
+            Phi[i, j] = phi(X_normalized[i, 2], j, s, M)
+    return Phi
+
+# 預測
+def calculate_predictions(Phi, w):
+    t_pred = Phi @ w
+    return t_pred
+
+# Min error function
+def calculate_min_error(t, t_pred):
+    error = 0.5 * np.mean((t - t_pred) ** 2)
+    return error
+
+data = pd.read_csv('HW1.csv')
+
+X = data[['song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'speechiness', 'tempo', 'audio_valence']].values
+t = data['song_popularity'].values
+
+X_normalized = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
+
+s = 0.3
+M_values = [5, 10, 15, 20, 25, 30]
+
+plt.figure(figsize=(12, 8))
+
+for M_val in M_values:
+    # basis function
+    Phi = calculate_Phi(X_normalized, M_val, s)
+
+    #計算最小二乘
+    pinv = np.linalg.pinv(Phi)
+    w = pinv @ t
+
+    # 預測
+    t_pred = calculate_predictions(Phi, w)
+
+    # Min error function
+    error = calculate_min_error(t, t_pred)
+
+    # 排除 x3 <-3 和 >2 的部分
+    mask = (X_normalized[:, 2] >= -3) & (X_normalized[:, 2] <= 2)
+    X_plot = X_normalized[mask]
+    t_plot = t[mask]
+
+    # 繪製擬合曲線
+    sorted_indices = np.argsort(X_plot[:, 2])
+    plt.plot(X_plot[sorted_indices, 2], t_pred[mask][sorted_indices], label=f'M={M_val}, error={error}')
+
+plt.scatter(X_plot[:, 2], t_plot, label='Original Data', color='blue', alpha=0.5)
+plt.xlabel('danceability (normalized)')
+plt.ylabel('popularity')
+plt.title('Fitting Curves with Different M Values when λ = 0.3')
+plt.legend()
+plt.show()
